@@ -1,8 +1,11 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
+	"todo-task-scheduler/internal/db"
 )
 
 func nextDateHandler(w http.ResponseWriter, req *http.Request) {
@@ -13,7 +16,7 @@ func nextDateHandler(w http.ResponseWriter, req *http.Request) {
 	repeat := query.Get("repeat")
 
 	if dateStr == "" || repeat == "" {
-		http.Error(w, "require query parameters 'date' and 'repeat'", http.StatusBadRequest)
+		writeJson(w, map[string]string{"error": "require query parameters 'date' and 'repeat'"})
 		return
 	}
 
@@ -23,7 +26,7 @@ func nextDateHandler(w http.ResponseWriter, req *http.Request) {
 	} else {
 		t, err := time.Parse(dateFormat, nowStr)
 		if err != nil {
-			http.Error(w, "incorrect 'now' parameter", http.StatusBadRequest)
+			writeJson(w, map[string]string{"error": "incorrect 'now' parameter"})
 			return
 		}
 		now = t
@@ -31,10 +34,128 @@ func nextDateHandler(w http.ResponseWriter, req *http.Request) {
 
 	next, err := NextDate(now, dateStr, repeat)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeJson(w, map[string]string{"error": err.Error()})
 		return
 	}
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	_, _ = w.Write([]byte(next))
+}
+
+func taskHandler(w http.ResponseWriter, req *http.Request) {
+	switch req.Method {
+	case http.MethodPost:
+		addTaskHandler(w, req)
+	case http.MethodGet:
+		getTaskHandler(w, req)
+	case http.MethodPut:
+		updateTaskHandler(w, req)
+	case http.MethodDelete:
+		deleteTaskHandler(w, req)
+	default:
+		w.Header().Set("Allow", "GET, POST, PUT, DELETE")
+		writeJson(w, map[string]string{"error": "method not allowed"})
+	}
+}
+
+func getTaskHandler(w http.ResponseWriter, req *http.Request) {
+	id := strings.TrimSpace(req.URL.Query().Get("id"))
+	if id == "" {
+		writeJson(w, map[string]string{"error": "ID not specified"})
+		return
+	}
+	t, err := db.GetTask(id)
+	if err != nil {
+		writeJson(w, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJson(w, t)
+}
+
+func updateTaskHandler(w http.ResponseWriter, req *http.Request) {
+	defer req.Body.Close()
+
+	var t db.Task
+	dec := json.NewDecoder(req.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&t); err != nil {
+		writeJson(w, map[string]string{"error": "invalid JSON: " + err.Error()})
+		return
+	}
+
+	t.Title = strings.TrimSpace(t.Title)
+	t.Date = strings.TrimSpace(t.Date)
+	t.Repeat = strings.TrimSpace(t.Repeat)
+	t.Comment = strings.TrimSpace(t.Comment)
+	t.ID = strings.TrimSpace(t.ID)
+
+	if t.ID == "" {
+		writeJson(w, map[string]string{"error": "ID not specified"})
+		return
+	}
+	if t.Title == "" {
+		writeJson(w, map[string]string{"error": "title is required"})
+		return
+	}
+
+	if err := checkDate(&t); err != nil {
+		writeJson(w, map[string]string{"error": err.Error()})
+		return
+	}
+
+	if err := db.UpdateTask(&t); err != nil {
+		writeJson(w, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJson(w, struct{}{})
+}
+
+func deleteTaskHandler(w http.ResponseWriter, req *http.Request) {
+	id := strings.TrimSpace(req.URL.Query().Get("id"))
+	if id == "" {
+		writeJson(w, map[string]string{"error": "ID not specified"})
+		return
+	}
+	if err := db.DeleteTask(id); err != nil {
+		writeJson(w, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJson(w, struct{}{})
+}
+
+func doneTaskHandler(w http.ResponseWriter, req *http.Request) {
+	defer req.Body.Close()
+
+	id := strings.TrimSpace(req.URL.Query().Get("id"))
+	if id == "" {
+		writeJson(w, map[string]string{"error": "ID not specified"})
+		return
+	}
+	t, err := db.GetTask(id)
+	if err != nil {
+		writeJson(w, map[string]string{"error": err.Error()})
+		return
+	}
+
+	if strings.TrimSpace(t.Repeat) == "" {
+		if err := db.DeleteTask(id); err != nil {
+			writeJson(w, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJson(w, struct{}{})
+		return
+	}
+
+	next, err := NextDate(time.Now(), t.Date, t.Repeat)
+	if err != nil {
+		writeJson(w, map[string]string{"error": err.Error()})
+		return
+	}
+
+	if err := db.UpdateDate(next, id); err != nil {
+		writeJson(w, map[string]string{"error": err.Error()})
+		return
+	}
+
+	writeJson(w, struct{}{})
 }
