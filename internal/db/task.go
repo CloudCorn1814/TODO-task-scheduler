@@ -51,7 +51,7 @@ func queryTasks(query string, args ...any) ([]*Task, error) {
 	return tasks, nil
 }
 
-func SearchTasks(search string, limit int) ([]*Task, error) {
+func SearchTasks(search string, limit int) ([]*Task, error) { // *5
 	if t, err := time.Parse("02.01.2006", search); err == nil {
 		date := t.Format("20060102")
 		query := `SELECT id, date, title, repeat, comment 
