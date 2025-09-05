@@ -15,5 +15,6 @@ func main() {
 	defer db.DataBase.Close()
 
 	srv := server.NewServer(cfg, db.DataBase)
+	log.Printf("server starting on port :%s", cfg.Port)
 	log.Fatal(srv.Server.ListenAndServe())
 }

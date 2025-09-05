@@ -12,27 +12,27 @@ func addTaskHandler(w http.ResponseWriter, req *http.Request) {
 
 	var task db.Task
 	if err := json.NewDecoder(req.Body).Decode(&task); err != nil {
-		writeJson(w, map[string]string{"error": err.Error()})
+		writeJson(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
 
 	if task.Title == "" {
-		writeJson(w, map[string]string{"error": "title is required"})
+		writeJson(w, http.StatusBadRequest, map[string]string{"error": "title is required"})
 		return
 	}
 
 	if err := checkDate(&task); err != nil {
-		writeJson(w, map[string]string{"error": err.Error()})
+		writeJson(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
 
 	id, err := db.AddTask(&task)
 	if err != nil {
-		writeJson(w, map[string]string{"error": err.Error()})
+		writeJson(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
 
-	writeJson(w, struct {
+	writeJson(w, http.StatusCreated, struct {
 		ID int64 `json:"id"`
 	}{ID: id})
 }
@@ -41,10 +41,10 @@ func checkDate(task *db.Task) error {
 	now := time.Now()
 
 	if task.Date == "" {
-		task.Date = now.Format("20060102")
+		task.Date = now.Format(dateFormat)
 	}
 
-	t, err := time.Parse("20060102", task.Date)
+	t, err := time.Parse(dateFormat, task.Date)
 	if err != nil {
 		return err
 	}
@@ -57,9 +57,9 @@ func checkDate(task *db.Task) error {
 		}
 	}
 
-	if now.Format("20060102") > t.Format("20060102") {
+	if now.Format(dateFormat) > t.Format(dateFormat) {
 		if len(task.Repeat) == 0 {
-			task.Date = now.Format("20060102")
+			task.Date = now.Format(dateFormat)
 		} else {
 			task.Date = next
 		}
@@ -68,7 +68,8 @@ func checkDate(task *db.Task) error {
 	return nil
 }
 
-func writeJson(w http.ResponseWriter, data any) {
+func writeJson(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-	_ = json.NewEncoder(w).Encode(data)
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v)
 }

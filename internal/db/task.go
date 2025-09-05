@@ -7,6 +7,9 @@ import (
 	"time"
 )
 
+const dateFormat = "20060102"
+const taskLimit = 10
+
 type Task struct {
 	ID      string `json:"id"`
 	Date    string `json:"date"`
@@ -39,7 +42,7 @@ func queryTasks(query string, args ...any) ([]*Task, error) {
 		if err := rows.Scan(&id, &t.Date, &t.Title, &t.Repeat, &t.Comment); err != nil {
 			return nil, err
 		}
-		t.ID = strconv.FormatInt(id, 10)
+		t.ID = strconv.FormatInt(id, taskLimit)
 		tasks = append(tasks, &t)
 	}
 	if err = rows.Err(); err != nil {
@@ -53,7 +56,7 @@ func queryTasks(query string, args ...any) ([]*Task, error) {
 
 func SearchTasks(search string, limit int) ([]*Task, error) { // *5
 	if t, err := time.Parse("02.01.2006", search); err == nil {
-		date := t.Format("20060102")
+		date := t.Format(dateFormat)
 		query := `SELECT id, date, title, repeat, comment 
                   FROM scheduler 
                   WHERE date = ? 
@@ -80,19 +83,19 @@ func Tasks(limit int) ([]*Task, error) {
 }
 
 func GetTask(id string) (*Task, error) {
-	query := `SELECT id, date, title, repeat, comment FROM scheduler WHERE id = ? LIMIT 1`
+	query := `SELECT id, date, title, repeat, comment FROM scheduler WHERE id = ?`
 
-	var t Task
+	t := &Task{}
 	var numId int64
 	err := DataBase.QueryRow(query, id).Scan(&numId, &t.Date, &t.Title, &t.Repeat, &t.Comment)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("Task not found")
+			return nil, err
 		}
 		return nil, err
 	}
-	t.ID = strconv.FormatInt(numId, 10)
-	return &t, nil
+	t.ID = strconv.FormatInt(numId, taskLimit)
+	return t, nil
 }
 
 func UpdateTask(task *Task) error {

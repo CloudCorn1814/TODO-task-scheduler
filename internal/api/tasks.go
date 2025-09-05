@@ -5,6 +5,8 @@ import (
 	"todo-task-scheduler/internal/db"
 )
 
+const taskLimit = 10
+
 type TasksResp struct {
 	Tasks []*db.Task `json:"tasks"`
 }
@@ -16,18 +18,18 @@ func tasksHandler(w http.ResponseWriter, req *http.Request) {
 	var err error
 
 	if search != "" {
-		tasks, err = db.SearchTasks(search, 10)
+		tasks, err = db.SearchTasks(search, taskLimit)
 	} else {
-		tasks, err = db.Tasks(10)
+		tasks, err = db.Tasks(taskLimit)
 	}
 
 	if err != nil {
-		writeJson(w, map[string]string{"error": err.Error()})
+		writeJson(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
 	if tasks == nil {
 		tasks = []*db.Task{}
 	}
 
-	writeJson(w, TasksResp{Tasks: tasks})
+	writeJson(w, http.StatusOK, TasksResp{Tasks: tasks})
 }
