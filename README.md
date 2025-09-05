@@ -34,7 +34,7 @@ cd todo-task-scheduler
 ```
 2. Установить зависимости:
 ```
-   go mod tidy
+go mod tidy
 ```
 4. Запустить сервер:
 ``` 
